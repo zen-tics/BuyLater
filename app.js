@@ -129,8 +129,15 @@ function closeAdd() { hideSheet('add'); }
 function pickSource(kind) {
   document.querySelectorAll('.src-opt').forEach(o => o.classList.remove('on'));
   $('src' + kind.charAt(0).toUpperCase() + kind.slice(1)).classList.add('on');
+  $('screenshotTip').style.display = 'none';
   if (kind === 'camera') { $('urlField').style.display = 'none'; $('fileCamera').click(); }
   else if (kind === 'upload') { $('urlField').style.display = 'none'; $('fileUpload').click(); }
+  else if (kind === 'screenshot') {
+    $('urlField').style.display = 'none';
+    $('previewWrap').style.display = 'none';
+    $('formFields').style.display = 'none';
+    $('screenshotTip').style.display = 'block';
+  }
   else if (kind === 'url') {
     $('urlField').style.display = 'block';
     $('previewWrap').style.display = 'none';
@@ -138,6 +145,60 @@ function pickSource(kind) {
     prefillForm({});
     draft.source = '';
   }
+}
+
+async function takeScreenshot() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    toast('Screen capture not supported in this browser');
+    return;
+  }
+  let stream;
+  try {
+    // Ask the browser to share the screen — a system-level permission prompt
+    // appears; the user chooses what to share. This is enforced by the OS and
+    // cannot be bypassed. The app captures ONE frame then immediately stops.
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1 },
+      audio: false,
+    });
+  } catch (err) {
+    // User cancelled or denied — not an error, just close the tip
+    $('screenshotTip').style.display = 'none';
+    $('srcScreenshot').classList.remove('on');
+    return;
+  }
+
+  // Grab a single frame via an offscreen video element -> canvas -> blob
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.muted = true;
+  await video.play();
+
+  // Give the video one frame to render
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  // Stop sharing immediately — single frame captured, nothing more is read
+  stream.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+
+  // Convert to blob and process exactly like a photo upload
+  canvas.toBlob(async (blob) => {
+    if (!blob) { toast('Capture failed — try again'); return; }
+    $('screenshotTip').style.display = 'none';
+    const scaled = await downscale(blob, 1280);
+    draft.blob = scaled;
+    draft.imgURL = blobURL(scaled);
+    $('previewImg').src = draft.imgURL;
+    $('previewWrap').style.display = 'block';
+    $('formFields').style.display = 'block';
+    prefillForm({});
+    if (settings.ocrOn) runOCR(scaled);
+  }, 'image/jpeg', 0.85);
 }
 
 $('urlInput')?.addEventListener('input', (e) => {
@@ -201,9 +262,12 @@ async function runOCR(blob) {
       }
     });
     const text = (data && data.text) ? data.text : '';
-    applyOCR(text);
+    const found = applyOCR(text) || {};
     status.style.display = 'none';
-    if (text.trim()) toast('Scanned — check the details');
+    const got = ['name', 'price', 'source'].filter(k => found[k]);
+    if (got.length >= 2) toast('Scanned — check the details');
+    else if (got.length === 1) toast('Got the ' + got[0] + ' — add the rest');
+    else toast("Couldn't read it — type the details");
   } catch (err) {
     status.style.display = 'none';
     // OCR is best-effort; the user can always type the fields.
@@ -236,95 +300,120 @@ function applyOCR(text) {
   if (name && !$('fName').value) $('fName').value = name;
   if (price != null && !$('fPrice').value) $('fPrice').value = price;
   if (source && !$('fSource').value) $('fSource').value = source;
+
+  return { name: !!name, price: price != null, source: !!source };
 }
 
-/* Detect a price, including retail-tag "split" prices like $9 ¹⁰ -> 9.10 */
+/* Remove characters OCR shouldn't be putting in a text field, collapse spaces. */
+function sanitizeField(s) {
+  return String(s || '')
+    .replace(/[<>{}\\|`~^]/g, ' ')      // strip markup-ish / junk chars
+    .replace(/[^\w\s.,&+%/()'°-]/g, ' ') // keep letters, digits, common punctuation
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/* Detect a price. Only currency-anchored numbers are trusted, so we don't grab
+   random digits (sizes, quantities, SKU codes) by mistake. */
 function detectPrice(text) {
   const joined = text.replace(/\n/g, ' ');
   const candidates = [];
-
-  // 1) symbol + number with proper decimals e.g. $9.10, SGD 12.90, RM8.80
-  const full = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})/gi;
   let m;
+
+  // 1) symbol + number with proper decimals e.g. $9.10, SGD 12.90, RM8.80, 5.00
+  const full = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})/gi;
   while ((m = full.exec(joined)) !== null) {
     const v = parseFloat(m[1].replace(/,/g, ''));
-    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 3 });
+    if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 3 });
   }
 
-  // 2) split price: symbol, dollars, then 1-2 small digits with NO decimal point
-  //    e.g. "$9 10", "$ 9 10", "$9 ¹⁰" (cents printed small) -> 9.10
-  const split = /(?:S?\$|SGD|RM)\s?(\d{1,4})\s+(\d{2})\b(?!\d)/gi;
+  // 2) split price: symbol, dollars, then exactly 2 small "cents" digits, no decimal
+  //    e.g. "$9 10" (cents printed small on a shelf tag) -> 9.10
+  const split = /(?:S?\$|SGD|RM)\s?(\d{1,4})\s+(\d{2})\b(?!\s*\d)/gi;
   while ((m = split.exec(joined)) !== null) {
-    // only treat as split-cents if there was no decimal already in this chunk
-    const dollars = parseInt(m[1], 10), cents = m[2];
-    const v = parseFloat(dollars + '.' + cents);
-    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 2 });
+    const v = parseFloat(parseInt(m[1], 10) + '.' + m[2]);
+    if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 2 });
   }
 
-  // 3) symbol + whole number e.g. $9, RM 80
-  const whole = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,5})\b(?!\.\d)/gi;
+  // 3) a bare "N.NN" number on its OWN short line (common on shelf tags like "5.00")
+  text.split('\n').forEach(line => {
+    const t = line.trim();
+    if (/^\d{1,4}\.\d{2}$/.test(t)) {
+      const v = parseFloat(t);
+      if (v > 0 && v < 100000) candidates.push({ v, score: 2 });
+    }
+  });
+
+  // 4) symbol + whole number e.g. $9, RM 80 (least specific)
+  const whole = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,5})\b(?!\s*[.\d])/gi;
   while ((m = whole.exec(joined)) !== null) {
     const v = parseFloat(m[1]);
-    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 1 });
+    if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 1 });
   }
 
   if (!candidates.length) return null;
-  // prefer the most specific match (highest score); tie-break by larger value
   candidates.sort((a, b) => b.score - a.score || b.v - a.v);
   return candidates[0].v;
 }
 
-/* Pick the most name-like line by scoring, not by length. */
+/* Pick the most name-like line. Conservative: if nothing scores well, return
+   '' and let the user type it — a blank beats a wrong guess they must delete. */
 function detectName(lines) {
-  // Common label words that signal "this line is NOT the product name"
-  const stop = /(sterile|strips?|extra|highly|non-?stick|wound|absorbent|skin friendly|net wt|barcode|qty|made in|expiry|best before|ingredients|warning|directions|www\.|http|\.com|reg\.?\s?no)/i;
+  // Words that mean "this line is packaging boilerplate, not the product name"
+  const stop = /(^sterile$|strips?$|pcs$|pieces$|net wt|barcode|qty|made in|expiry|best before|ingredients|warning|directions|hypoallergenic|www\.|http|\.com|reg\.?\s?no|illustration|availability|visuals are|more information|flexible fabric|low allergy|low adherent|for cuts|for grazes|skin friendly)/i;
+  // Promo-poster phrases (Image 4): "BUY ANY 2 ... GET 1 ..."
+  const promo = /(buy any|get \d|play mode|free|% off|promo|offer|discount|drinks?)/i;
 
-  let best = null, bestScore = -Infinity;
+  let best = null, bestScore = 1.5; // require a real positive score to accept anything
   lines.forEach((ln, idx) => {
-    const latin = (ln.match(/[A-Za-z]/g) || []).length;
-    const total = ln.replace(/\s/g, '').length || 1;
-    const latinRatio = latin / total;
+    const clean = sanitizeField(ln);
+    if (!clean) return;
+    const latin = (clean.match(/[A-Za-z]/g) || []).length;
+    const total = clean.replace(/\s/g, '').length || 1;
+    if (latin / total < 0.6) return;        // mostly non-Latin script -> skip
+    if (latin < 4) return;                   // too few letters (e.g. "N Cs") -> skip
 
-    // skip lines that are mostly non-Latin script (e.g. Arabic / CJK blocks)
-    if (latinRatio < 0.6) return;
-    // skip lines with too few letters or that are basically numbers/codes
-    if (latin < 3) return;
+    const words = clean.split(/\s+/).filter(Boolean);
+    const realWords = words.filter(w => /[A-Za-z]{3,}/.test(w)); // words with >=3 letters
+    if (realWords.length < 1) return;        // all fragments/codes -> skip
 
-    const words = ln.split(/\s+/).filter(Boolean);
-    const upperWords = words.filter(w => /^[A-Z0-9][A-Za-z0-9®™+]*$/.test(w) && /[A-Z]/.test(w)).length;
-    const lowerStart = words.filter(w => /^[a-z]/.test(w)).length;
+    // reject SKU/receipt code lines like "G ADH D/S6X8.3CM (N)" — lots of
+    // single letters, slashes and digits, few real words
+    const codey = words.filter(w => /[/\d]/.test(w) || w.length <= 2).length;
+    if (codey >= words.length * 0.5 && realWords.length < 2) return;
 
     let score = 0;
-    score += Math.max(0, 6 - idx) * 1.5;          // earlier lines are more likely the name
-    score += upperWords * 3;                        // CAPITALISED / TitleCase words look like brand/product
-    score -= lowerStart * 2;                         // lowercase words look like description prose
-    // a line that is mostly ALL-CAPS letters is very likely the product line
-    const capLetters = (ln.match(/[A-Z]/g) || []).length;
-    if (capLetters >= 4 && capLetters / latin > 0.7) score += 4;
-    if (ln.includes(' - ') || ln.includes('·')) score -= 6; // hyphen/dot bullet = marketing line
-    if (words.length >= 2 && words.length <= 6) score += 3;  // names are short-ish
-    if (words.length > 8) score -= 5;               // long line = description
-    if (ln.length > 45) score -= 4;
-    if (stop.test(ln)) score -= 8;                  // contains label/boilerplate words
-    if (/^[®™+\-•·.,:;]/.test(ln)) score -= 3;
+    score += Math.max(0, 6 - idx) * 1.2;     // earlier lines slightly favoured
+    score += realWords.length * 2;            // more real words = more name-like
+    const capWords = words.filter(w => /^[A-Z]/.test(w)).length;
+    score += capWords * 1.5;
+    const lowerStart = words.filter(w => /^[a-z]/.test(w)).length;
+    score -= lowerStart * 1.5;                // lowercase prose -> description
+    if (clean.includes(' - ') || clean.includes('·')) score -= 6;
+    if (realWords.length >= 1 && words.length <= 6) score += 2;
+    if (words.length > 8) score -= 6;
+    if (clean.length > 45) score -= 4;
+    if (stop.test(clean)) score -= 10;
+    if (promo.test(clean)) score -= 10;
 
-    if (score > bestScore) { bestScore = score; best = ln; }
+    if (score > bestScore) { bestScore = score; best = clean; }
   });
 
   if (!best) return '';
-  // Often the brand is one line and the product the next — stitch the top two
-  // strong lines if they're both short and adjacent.
-  const bi = lines.indexOf(best);
-  const neighbor = lines[bi - 1];
-  if (neighbor && bi > 0) {
-    const nWords = neighbor.split(/\s+/).filter(Boolean);
-    const nLatin = (neighbor.match(/[A-Za-z]/g) || []).length;
-    const nUpper = nWords.filter(w => /[A-Z]/.test(w) && /^[A-Z]/.test(w)).length;
-    if (nLatin >= 3 && nUpper >= 1 && nWords.length <= 3 && !stop.test(neighbor) && !neighbor.includes(' - ')) {
-      best = (neighbor + ' ' + best).trim();
+
+  // If a clear brand line sits just above, prepend it (e.g. "Hansaplast" + product).
+  // Skip store names (those belong in "Where from") and all-lowercase logos.
+  const storeName = /^(guardian|watsons|unity|ntuc|fairprice|cold storage|shopee|lazada)$/i;
+  const bi = lines.findIndex(l => sanitizeField(l) === best);
+  if (bi > 0) {
+    const nb = sanitizeField(lines[bi - 1]);
+    const nbWords = nb.split(/\s+/).filter(Boolean);
+    const nbReal = nbWords.filter(w => /[A-Za-z]{3,}/.test(w));
+    if (nbReal.length >= 1 && nbWords.length <= 3 && /^[A-Z]/.test(nb) &&
+        !storeName.test(nb) && !stop.test(nb) && !promo.test(nb) && !nb.includes(' - ')) {
+      best = (nb + ' ' + best).trim();
     }
   }
-  // tidy up: collapse spaces, cap length
   best = best.replace(/\s{2,}/g, ' ').trim();
   if (best.length > 60) best = best.slice(0, 60).trim();
   return best;

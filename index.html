@@ -238,7 +238,7 @@ nav.tabbar {
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 /* source picker */
-.src-pick { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.src-pick { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
 .src-opt { padding: 16px 8px; border-radius: 16px; background: var(--bg-elev-2); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; transition: transform .15s var(--ease), border-color .2s; }
 .src-opt:active { transform: scale(0.95); }
 .src-opt.on { border-color: var(--accent); background: var(--accent-soft); }
@@ -411,6 +411,10 @@ nav.tabbar {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <span>Upload</span>
     </button>
+    <button class="src-opt" id="srcScreenshot" onclick="pickSource('screenshot')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 7h.01M7 11h10M7 14h5"/></svg>
+      <span>Screen</span>
+    </button>
     <button class="src-opt" id="srcUrl" onclick="pickSource('url')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
       <span>URL</span>
@@ -419,6 +423,11 @@ nav.tabbar {
 
   <input type="file" id="fileCamera" accept="image/*" capture="environment" style="display:none" onchange="onFile(event)">
   <input type="file" id="fileUpload" accept="image/*" style="display:none" onchange="onFile(event)">
+
+  <div id="screenshotTip" style="display:none;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:14px;padding:13px 14px;margin-bottom:16px;font-size:13px;line-height:1.55;color:var(--accent)">
+    <b>How it works:</b> your browser will ask what to share — choose <b>your screen</b> or <b>a tab</b> showing the product. The app instantly captures one frame, then stops sharing. Nothing is sent anywhere.
+    <button onclick="takeScreenshot()" style="display:block;margin-top:10px;width:100%;padding:12px;border-radius:11px;background:var(--accent);color:#fff;font-size:14px;font-weight:650;border:none;cursor:pointer">Capture screen now</button>
+  </div>
 
   <div class="field" id="urlField" style="display:none">
     <label>Product link</label>
