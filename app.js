@@ -213,41 +213,121 @@ async function runOCR(blob) {
 
 function applyOCR(text) {
   if (!text) return;
-  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
-
-  // price: find the largest currency-looking number
-  let price = null;
-  const priceRe = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)?\s?(\d{1,3}(?:[, ]\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2})?)/gi;
-  let m, best = 0;
+  const rawLines = text.split('\n').map(s => s.replace(/\s{2,}/g, ' ').trim()).filter(Boolean);
   const joined = text.replace(/\n/g, ' ');
-  while ((m = priceRe.exec(joined)) !== null) {
-    const val = parseFloat(m[1].replace(/[, ]/g, ''));
-    if (!isNaN(val) && val > best && val < 100000) {
-      // prefer matches that had a currency symbol or decimals
-      const hadSymbol = /\$|SGD|RM|USD|£|€|¥/i.test(m[0]);
-      const hasDecimals = /\.\d/.test(m[0]);
-      if (hadSymbol || hasDecimals) { best = val; price = val; }
-    }
-  }
 
-  // name: the longest mostly-alphabetic line that isn't a price/code
-  let name = '';
-  for (const ln of lines) {
-    const letters = (ln.match(/[a-zA-Z]/g) || []).length;
-    if (letters >= 4 && letters / ln.length > 0.5 && ln.length <= 60) {
-      if (ln.length > name.length) name = ln;
-    }
-  }
-  name = name.replace(/\s{2,}/g, ' ').trim();
+  /* ---------- PRICE ----------
+     Prefer a value attached to a currency symbol. Also handle "split" prices
+     where a retail tag shows the dollars big and the cents small, so OCR
+     reads "$9 10" or "$9" then "10" on separate tokens -> 9.10. */
+  const price = detectPrice(text);
 
-  // source: look for a known marketplace keyword
-  const sources = ['Shopee', 'Lazada', 'Taobao', 'Amazon', 'Qoo10', 'Carousell', 'AliExpress', 'Zalora', 'IKEA', 'Decathlon'];
+  /* ---------- NAME ----------
+     Score each line. A product name is usually a SHORT, prominent line with
+     capital letters, near the top — not a long lowercase marketing sentence
+     and not a block of non-Latin script. We score and pick the best. */
+  const name = detectName(rawLines);
+
+  /* ---------- SOURCE ---------- */
+  const sources = ['Shopee', 'Lazada', 'Taobao', 'Amazon', 'Qoo10', 'Carousell', 'AliExpress', 'Zalora', 'IKEA', 'Decathlon', 'Guardian', 'Watsons', 'Unity', 'NTUC', 'FairPrice', 'Cold Storage'];
   let source = '';
-  for (const s of sources) { if (new RegExp(s, 'i').test(joined)) { source = s; break; } }
+  for (const s of sources) { if (new RegExp('\\b' + s.replace(/\s/g, '\\s?') + '\\b', 'i').test(joined)) { source = s; break; } }
 
   if (name && !$('fName').value) $('fName').value = name;
   if (price != null && !$('fPrice').value) $('fPrice').value = price;
   if (source && !$('fSource').value) $('fSource').value = source;
+}
+
+/* Detect a price, including retail-tag "split" prices like $9 ¹⁰ -> 9.10 */
+function detectPrice(text) {
+  const joined = text.replace(/\n/g, ' ');
+  const candidates = [];
+
+  // 1) symbol + number with proper decimals e.g. $9.10, SGD 12.90, RM8.80
+  const full = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})/gi;
+  let m;
+  while ((m = full.exec(joined)) !== null) {
+    const v = parseFloat(m[1].replace(/,/g, ''));
+    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 3 });
+  }
+
+  // 2) split price: symbol, dollars, then 1-2 small digits with NO decimal point
+  //    e.g. "$9 10", "$ 9 10", "$9 ¹⁰" (cents printed small) -> 9.10
+  const split = /(?:S?\$|SGD|RM)\s?(\d{1,4})\s+(\d{2})\b(?!\d)/gi;
+  while ((m = split.exec(joined)) !== null) {
+    // only treat as split-cents if there was no decimal already in this chunk
+    const dollars = parseInt(m[1], 10), cents = m[2];
+    const v = parseFloat(dollars + '.' + cents);
+    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 2 });
+  }
+
+  // 3) symbol + whole number e.g. $9, RM 80
+  const whole = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,5})\b(?!\.\d)/gi;
+  while ((m = whole.exec(joined)) !== null) {
+    const v = parseFloat(m[1]);
+    if (!isNaN(v) && v < 100000) candidates.push({ v, score: 1 });
+  }
+
+  if (!candidates.length) return null;
+  // prefer the most specific match (highest score); tie-break by larger value
+  candidates.sort((a, b) => b.score - a.score || b.v - a.v);
+  return candidates[0].v;
+}
+
+/* Pick the most name-like line by scoring, not by length. */
+function detectName(lines) {
+  // Common label words that signal "this line is NOT the product name"
+  const stop = /(sterile|strips?|extra|highly|non-?stick|wound|absorbent|skin friendly|net wt|barcode|qty|made in|expiry|best before|ingredients|warning|directions|www\.|http|\.com|reg\.?\s?no)/i;
+
+  let best = null, bestScore = -Infinity;
+  lines.forEach((ln, idx) => {
+    const latin = (ln.match(/[A-Za-z]/g) || []).length;
+    const total = ln.replace(/\s/g, '').length || 1;
+    const latinRatio = latin / total;
+
+    // skip lines that are mostly non-Latin script (e.g. Arabic / CJK blocks)
+    if (latinRatio < 0.6) return;
+    // skip lines with too few letters or that are basically numbers/codes
+    if (latin < 3) return;
+
+    const words = ln.split(/\s+/).filter(Boolean);
+    const upperWords = words.filter(w => /^[A-Z0-9][A-Za-z0-9®™+]*$/.test(w) && /[A-Z]/.test(w)).length;
+    const lowerStart = words.filter(w => /^[a-z]/.test(w)).length;
+
+    let score = 0;
+    score += Math.max(0, 6 - idx) * 1.5;          // earlier lines are more likely the name
+    score += upperWords * 3;                        // CAPITALISED / TitleCase words look like brand/product
+    score -= lowerStart * 2;                         // lowercase words look like description prose
+    // a line that is mostly ALL-CAPS letters is very likely the product line
+    const capLetters = (ln.match(/[A-Z]/g) || []).length;
+    if (capLetters >= 4 && capLetters / latin > 0.7) score += 4;
+    if (ln.includes(' - ') || ln.includes('·')) score -= 6; // hyphen/dot bullet = marketing line
+    if (words.length >= 2 && words.length <= 6) score += 3;  // names are short-ish
+    if (words.length > 8) score -= 5;               // long line = description
+    if (ln.length > 45) score -= 4;
+    if (stop.test(ln)) score -= 8;                  // contains label/boilerplate words
+    if (/^[®™+\-•·.,:;]/.test(ln)) score -= 3;
+
+    if (score > bestScore) { bestScore = score; best = ln; }
+  });
+
+  if (!best) return '';
+  // Often the brand is one line and the product the next — stitch the top two
+  // strong lines if they're both short and adjacent.
+  const bi = lines.indexOf(best);
+  const neighbor = lines[bi - 1];
+  if (neighbor && bi > 0) {
+    const nWords = neighbor.split(/\s+/).filter(Boolean);
+    const nLatin = (neighbor.match(/[A-Za-z]/g) || []).length;
+    const nUpper = nWords.filter(w => /[A-Z]/.test(w) && /^[A-Z]/.test(w)).length;
+    if (nLatin >= 3 && nUpper >= 1 && nWords.length <= 3 && !stop.test(neighbor) && !neighbor.includes(' - ')) {
+      best = (neighbor + ' ' + best).trim();
+    }
+  }
+  // tidy up: collapse spaces, cap length
+  best = best.replace(/\s{2,}/g, ' ').trim();
+  if (best.length > 60) best = best.slice(0, 60).trim();
+  return best;
 }
 
 async function saveItem() {
