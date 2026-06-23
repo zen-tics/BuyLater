@@ -275,6 +275,13 @@ nav.tabbar {
 .set-row .l .s { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
 .set-row .num { width: 64px; }
 .set-row .num input { width: 100%; padding: 9px; text-align: center; border-radius: 10px; background: var(--bg-elev-2); border: 1px solid var(--line); color: var(--text); font-size: 15px; font-weight: 600; }
+/* days + minutes duration row */
+.dur-row { display: flex; align-items: center; gap: 10px; padding: 0 0 4px; }
+.dur-field { display: flex; align-items: center; gap: 8px; flex: 1; background: var(--bg-elev-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.dur-field input { width: 0; flex: 1; background: none; border: none; color: var(--text); font-size: 16px; font-weight: 650; text-align: center; min-width: 0; }
+.dur-field input:focus { outline: none; }
+.dur-field span { font-size: 12px; font-weight: 650; color: var(--text-dim); letter-spacing: .3px; white-space: nowrap; }
+.dur-sep { font-size: 16px; font-weight: 600; color: var(--text-faint); flex-shrink: 0; }
 
 /* toggle */
 .toggle { width: 46px; height: 28px; border-radius: 16px; background: var(--line); position: relative; transition: background .25s var(--ease); flex-shrink: 0; }

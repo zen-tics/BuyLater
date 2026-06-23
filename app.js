@@ -11,8 +11,10 @@ const DEFAULTS = {
   theme: 'dark',
   remindersOn: true,
   thresholdPrice: 50,      // SGD
-  daysUnder: 7,            // cooling-off for items < threshold
-  daysOver: 14,            // cooling-off for items >= threshold
+  daysUnder: 7,            // cooling-off days for items < threshold
+  minsUnder: 0,            // extra minutes on top of daysUnder
+  daysOver: 14,            // cooling-off days for items >= threshold
+  minsOver: 0,             // extra minutes on top of daysOver
   ocrOn: true,
 };
 let settings = { ...DEFAULTS };
@@ -72,18 +74,36 @@ function fmtMoney(n) {
   if (n == null || n === '' || isNaN(n)) return '—';
   return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function coolingDays(price) {
-  return Number(price) >= settings.thresholdPrice ? settings.daysOver : settings.daysUnder;
+function coolingMs(price) {
+  const isOver = Number(price) >= settings.thresholdPrice;
+  const days = isOver ? (settings.daysOver || 0) : (settings.daysUnder || 0);
+  const mins = isOver ? (settings.minsOver || 0) : (settings.minsUnder || 0);
+  return (days * DAY) + (mins * 60000);
+}
+function coolingLabel(price) {
+  const isOver = Number(price) >= settings.thresholdPrice;
+  const days = isOver ? (settings.daysOver || 0) : (settings.daysUnder || 0);
+  const mins = isOver ? (settings.minsOver || 0) : (settings.minsUnder || 0);
+  const parts = [];
+  if (days) parts.push(days + 'd');
+  if (mins) parts.push(mins + 'm');
+  return parts.length ? parts.join(' ') : '0d';
 }
 function reviewDate(item) {
   const base = new Date((item.lastDeferredOn || item.addedOn) + 'T00:00:00').getTime();
-  return base + coolingDays(item.price) * DAY;
+  return base + coolingMs(item.price);
 }
 function isDue(item) {
   return item.status === 'waiting' && Date.now() >= reviewDate(item);
 }
-function daysLeft(item) {
-  return Math.ceil((reviewDate(item) - Date.now()) / DAY);
+function timeLeft(item) {
+  const ms = reviewDate(item) - Date.now();
+  if (ms <= 0) return 'now';
+  const totalMins = Math.ceil(ms / 60000);
+  if (totalMins < 60) return totalMins + 'm';
+  const hrs = Math.floor(totalMins / 60);
+  if (hrs < 24) return hrs + 'h';
+  return Math.ceil(ms / DAY) + 'd';
 }
 let blobURLs = [];
 function blobURL(blob) { const u = URL.createObjectURL(blob); blobURLs.push(u); return u; }
@@ -320,31 +340,54 @@ function detectPrice(text) {
   const candidates = [];
   let m;
 
-  // 1) symbol + number with proper decimals e.g. $9.10, SGD 12.90, RM8.80, 5.00
+  // 1) symbol + decimal e.g. $9.10, SGD 12.90, RM8.80  [score 4]
   const full = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})/gi;
   while ((m = full.exec(joined)) !== null) {
     const v = parseFloat(m[1].replace(/,/g, ''));
+    if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 4 });
+  }
+
+  // 2) split price: symbol, dollars, then exactly 2 cents digits (no decimal)
+  //    e.g. "$9 10" on a shelf tag -> 9.10  [score 3]
+  const split = /(?:S?\$|SGD|RM)\s?(\d{1,4})\s+(\d{2})\b(?!\s*[\d.])/gi;
+  while ((m = split.exec(joined)) !== null) {
+    const v = parseFloat(parseInt(m[1], 10) + '.' + m[2]);
     if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 3 });
   }
 
-  // 2) split price: symbol, dollars, then exactly 2 small "cents" digits, no decimal
-  //    e.g. "$9 10" (cents printed small on a shelf tag) -> 9.10
-  const split = /(?:S?\$|SGD|RM)\s?(\d{1,4})\s+(\d{2})\b(?!\s*\d)/gi;
-  while ((m = split.exec(joined)) !== null) {
-    const v = parseFloat(parseInt(m[1], 10) + '.' + m[2]);
-    if (!isNaN(v) && v > 0 && v < 100000) candidates.push({ v, score: 2 });
-  }
-
-  // 3) a bare "N.NN" number on its OWN short line (common on shelf tags like "5.00")
+  // 3) bare "N.NN" on its OWN line (shelf tag like "5.00" or "12.90")  [score 3]
   text.split('\n').forEach(line => {
     const t = line.trim();
     if (/^\d{1,4}\.\d{2}$/.test(t)) {
       const v = parseFloat(t);
-      if (v > 0 && v < 100000) candidates.push({ v, score: 2 });
+      if (v > 0 && v < 100000) candidates.push({ v, score: 3 });
     }
   });
 
-  // 4) symbol + whole number e.g. $9, RM 80 (least specific)
+  // 4) bare whole number on its OWN line — e.g. "5" alone on a shelf tag line.
+  //    Accept with currency context anywhere, OR if the number appears between
+  //    product-name lines and barcode/sku lines (sandwich pattern on receipts).  [score 2]
+  const hasCurrencyContext = /(?:S?\$|SGD|RM|USD|\$|£|€|¥)/i.test(joined);
+  const allLines = text.split('\n').map(l => l.trim());
+  allLines.forEach((line, li) => {
+    const t = line.trim();
+    if (/^\d{1,4}$/.test(t)) {
+      const v = parseFloat(t);
+      if (v > 0 && v < 10000) {
+        // accept if there's currency context anywhere, OR if this line is
+        // flanked by non-numeric product lines (not just surrounded by codes)
+        const prevLine = allLines[li - 1] || '';
+        const nextLine = allLines[li + 1] || '';
+        const prevHasLetters = /[A-Za-z]{3,}/.test(prevLine);
+        const nextHasLetters = /[A-Za-z]{3,}/.test(nextLine) || /\d{5,}/.test(nextLine);
+        if (hasCurrencyContext || (prevHasLetters && nextHasLetters)) {
+          candidates.push({ v, score: 2 });
+        }
+      }
+    }
+  });
+
+  // 5) symbol + whole number e.g. $9, RM 80 (least specific)  [score 1]
   const whole = /(?:S?\$|SGD|RM|USD|US\$|£|€|¥)\s?(\d{1,5})\b(?!\s*[.\d])/gi;
   while ((m = whole.exec(joined)) !== null) {
     const v = parseFloat(m[1]);
@@ -352,6 +395,8 @@ function detectPrice(text) {
   }
 
   if (!candidates.length) return null;
+  // highest score wins; tie-break: prefer values that look like realistic prices
+  // (avoid single digits unless nothing else found)
   candidates.sort((a, b) => b.score - a.score || b.v - a.v);
   return candidates[0].v;
 }
@@ -364,7 +409,7 @@ function detectName(lines) {
   // Promo-poster phrases (Image 4): "BUY ANY 2 ... GET 1 ..."
   const promo = /(buy any|get \d|play mode|free|% off|promo|offer|discount|drinks?)/i;
 
-  let best = null, bestScore = 1.5; // require a real positive score to accept anything
+  let best = null, bestScore = 0; // guards are latin<4 and realWords<1; don't double-gate with a score floor
   lines.forEach((ln, idx) => {
     const clean = sanitizeField(ln);
     if (!clean) return;
@@ -383,10 +428,12 @@ function detectName(lines) {
     if (codey >= words.length * 0.5 && realWords.length < 2) return;
 
     let score = 0;
-    score += Math.max(0, 6 - idx) * 1.2;     // earlier lines slightly favoured
+    score += Math.max(0, 8 - idx) * 1.5;     // earlier lines strongly favoured
     score += realWords.length * 2;            // more real words = more name-like
     const capWords = words.filter(w => /^[A-Z]/.test(w)).length;
-    score += capWords * 1.5;
+    score += capWords * 2;                    // Title/UPPER case = brand/product
+    // single short capitalised word on an early line = strong brand signal (e.g. "Meiji")
+    if (realWords.length === 1 && capWords === 1 && idx <= 2 && clean.length <= 20) score += 4;
     const lowerStart = words.filter(w => /^[a-z]/.test(w)).length;
     score -= lowerStart * 1.5;                // lowercase prose -> description
     if (clean.includes(' - ') || clean.includes('·')) score -= 6;
@@ -401,10 +448,12 @@ function detectName(lines) {
 
   if (!best) return '';
 
-  // If a clear brand line sits just above, prepend it (e.g. "Hansaplast" + product).
-  // Skip store names (those belong in "Where from") and all-lowercase logos.
+  // Stitch adjacent lines: prepend brand above, or append product line below.
+  // e.g. "Meiji" (line 0) + "Lactose Free Milk" (line 1) -> "Meiji Lactose Free Milk"
   const storeName = /^(guardian|watsons|unity|ntuc|fairprice|cold storage|shopee|lazada)$/i;
   const bi = lines.findIndex(l => sanitizeField(l) === best);
+
+  // Try prepending the line above (brand above product)
   if (bi > 0) {
     const nb = sanitizeField(lines[bi - 1]);
     const nbWords = nb.split(/\s+/).filter(Boolean);
@@ -412,6 +461,18 @@ function detectName(lines) {
     if (nbReal.length >= 1 && nbWords.length <= 3 && /^[A-Z]/.test(nb) &&
         !storeName.test(nb) && !stop.test(nb) && !promo.test(nb) && !nb.includes(' - ')) {
       best = (nb + ' ' + best).trim();
+    }
+  }
+
+  // Try appending the line below (product descriptor below brand name)
+  // Only if best is currently just 1-2 short words (brand only)
+  const bestWords = best.split(/\s+/).filter(Boolean);
+  if (bestWords.length <= 2 && bi + 1 < lines.length) {
+    const nb = sanitizeField(lines[bi + 1]);
+    const nbWords = nb.split(/\s+/).filter(Boolean);
+    const nbReal = nbWords.filter(w => /[A-Za-z]{3,}/.test(w));
+    if (nbReal.length >= 2 && nbWords.length <= 6 && !stop.test(nb) && !promo.test(nb) && !nb.includes(' - ')) {
+      best = (best + ' ' + nb).trim();
     }
   }
   best = best.replace(/\s{2,}/g, ' ').trim();
@@ -441,7 +502,7 @@ async function saveItem() {
   };
   await dbPut('items', item);
   closeAdd();
-  toast('Saved — review in ' + coolingDays(item.price) + ' days');
+  toast('Saved — review in ' + coolingLabel(item.price));
   go('list');
   await refreshBadge();
 }
@@ -469,7 +530,7 @@ function cardHTML(i) {
     : `<div class="thumb placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>`;
   const pill = due
     ? '<span class="pill due">Decide now</span>'
-    : `<span class="pill waiting">${daysLeft(i)}d left</span>`;
+    : `<span class="pill waiting">${timeLeft(i)} left</span>`;
   return `<div class="card" onclick="openDetail('${i.id}')">
     ${due ? '<div class="due-dot"></div>' : ''}
     ${img}
@@ -524,7 +585,7 @@ async function openDetail(id) {
   const banner = i.status === 'waiting'
     ? (due
       ? `<div class="review-banner due"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Cooling-off complete. Still want it?</div>`
-      : `<div class="review-banner waiting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Cooling off — review in ${daysLeft(i)} day${daysLeft(i) === 1 ? '' : 's'} (${fmtDate(new Date(reviewDate(i)).toISOString().slice(0,10))}).</div>`)
+      : `<div class="review-banner waiting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Cooling off — ${timeLeft(i)} left to review.</div>`)
     : `<div class="review-banner ${i.status === 'bought' ? 'waiting' : 'due'}" style="background:var(--${i.status==='bought'?'buy':'drop'}-soft);color:var(--${i.status==='bought'?'buy':'drop'})">${i.status === 'bought' ? 'You bought this' : 'You dropped this'} on ${fmtDate(i.decidedOn)}.</div>`;
 
   const urlChip = i.url ? `<a class="chip" href="${esc(i.url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open link</a>` : '';
@@ -565,7 +626,7 @@ async function decide(action) {
     i.deferCount = (i.deferCount || 0) + 1;
     i.history.push({ action: 'deferred', on: todayISO() });
     await dbPut('items', i);
-    toast('Deferred — back in ' + coolingDays(i.price) + ' days');
+    toast('Deferred — back in ' + coolingLabel(i.price));
   } else {
     i.status = action === 'buy' ? 'bought' : 'dropped';
     i.decidedOn = todayISO();
@@ -757,16 +818,24 @@ function renderSettings() {
     <div class="eyebrow">Cooling-off rules</div>
     <div class="set-group">
       <div class="set-row">
-        <div class="l"><div class="t">Price threshold</div><div class="s">Items at or above this wait longer.</div></div>
+        <div class="l"><div class="t">Price threshold (SGD)</div><div class="s">Items at or above this wait longer.</div></div>
         <div class="num"><input type="number" id="setThresh" value="${settings.thresholdPrice}" inputmode="decimal" onchange="saveNum('thresholdPrice',this.value,1)"></div>
       </div>
-      <div class="set-row">
-        <div class="l"><div class="t">Wait — under threshold</div><div class="s">Days to cool off for cheaper items.</div></div>
-        <div class="num"><input type="number" id="setUnder" value="${settings.daysUnder}" inputmode="numeric" onchange="saveNum('daysUnder',this.value,1)"></div>
+      <div class="set-row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div class="l"><div class="t">Wait — under threshold</div><div class="s">Cooling-off for cheaper items. Set days, minutes, or both.</div></div>
+        <div class="dur-row">
+          <div class="dur-field"><input type="number" min="0" value="${settings.daysUnder}" inputmode="numeric" onchange="saveNum('daysUnder',this.value,0)"><span>days</span></div>
+          <div class="dur-sep">+</div>
+          <div class="dur-field"><input type="number" min="0" value="${settings.minsUnder}" inputmode="numeric" onchange="saveNum('minsUnder',this.value,0)"><span>min</span></div>
+        </div>
       </div>
-      <div class="set-row">
-        <div class="l"><div class="t">Wait — over threshold</div><div class="s">Days to cool off for pricier items.</div></div>
-        <div class="num"><input type="number" id="setOver" value="${settings.daysOver}" inputmode="numeric" onchange="saveNum('daysOver',this.value,1)"></div>
+      <div class="set-row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div class="l"><div class="t">Wait — over threshold</div><div class="s">Cooling-off for pricier items. Set days, minutes, or both.</div></div>
+        <div class="dur-row">
+          <div class="dur-field"><input type="number" min="0" value="${settings.daysOver}" inputmode="numeric" onchange="saveNum('daysOver',this.value,0)"><span>days</span></div>
+          <div class="dur-sep">+</div>
+          <div class="dur-field"><input type="number" min="0" value="${settings.minsOver}" inputmode="numeric" onchange="saveNum('minsOver',this.value,0)"><span>min</span></div>
+        </div>
       </div>
     </div>
 
