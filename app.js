@@ -67,8 +67,15 @@ const DAY = 86400000;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 function fmtDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso + 'T00:00:00');
+  // handle both "2026-06-22" and full ISO timestamps
+  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T00:00:00');
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 function fmtMoney(n) {
   if (n == null || n === '' || isNaN(n)) return '—';
@@ -508,36 +515,99 @@ async function saveItem() {
 }
 
 /* ============================================================
-   RENDER: LIST
+   RENDER: LIST (all items — due → waiting → decided)
    ============================================================ */
 async function renderList() {
   revokeURLs();
-  const items = (await dbGetAll('items')).filter(i => i.status === 'waiting');
-  items.sort((a, b) => reviewDate(a) - reviewDate(b));
+  const all = await dbGetAll('items');
+
+  const due      = all.filter(i => isDue(i));
+  const waiting  = all.filter(i => i.status === 'waiting' && !isDue(i));
+  const decided  = all.filter(i => i.status === 'bought' || i.status === 'dropped');
+
+  // sort each group
+  due.sort((a, b) => reviewDate(a) - reviewDate(b));           // most overdue first
+  waiting.sort((a, b) => reviewDate(a) - reviewDate(b));       // soonest review first
+  decided.sort((a, b) => {                                      // most recent decision first
+    const ta = b.decidedOn ? new Date(b.decidedOn).getTime() : 0;
+    const tb = a.decidedOn ? new Date(a.decidedOn).getTime() : 0;
+    return ta - tb;
+  });
+
   const el = $('listContent');
-  if (!items.length) {
-    el.innerHTML = emptyState('grid', 'Nothing waiting yet',
-      'Tap the + button to photograph something you want to buy. Give it a few days — most wants fade.');
+
+  if (!all.length) {
+    el.innerHTML = emptyState('grid', 'Nothing here yet',
+      'Tap + to photograph something you want to buy. Give it a few days — most wants fade.');
     return;
   }
-  el.innerHTML = '<div class="grid">' + items.map(i => cardHTML(i)).join('') + '</div>';
+
+  let html = '';
+
+  if (due.length) {
+    html += sectionHeader('Decide now', due.length, 'var(--defer)');
+    html += '<div class="grid">' + due.map(i => cardHTML(i)).join('') + '</div>';
+  }
+
+  if (waiting.length) {
+    html += sectionHeader('Cooling off', waiting.length, 'var(--accent)');
+    html += '<div class="grid">' + waiting.map(i => cardHTML(i)).join('') + '</div>';
+  }
+
+  if (decided.length) {
+    html += sectionHeader('Decided', decided.length, 'var(--text-faint)');
+    html += '<div class="grid">' + decided.map(i => cardHTML(i)).join('') + '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function sectionHeader(label, count, color) {
+  return `<div class="list-section-head" style="--sc:${color}">
+    <span class="lsh-label">${label}</span>
+    <span class="lsh-count">${count}</span>
+  </div>`;
 }
 
 function cardHTML(i) {
   const due = isDue(i);
+  const decided = i.status === 'bought' || i.status === 'dropped';
   const img = i.blob
     ? `<img class="thumb" src="${blobURL(i.blob)}" alt="">`
     : `<div class="thumb placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>`;
-  const pill = due
-    ? '<span class="pill due">Decide now</span>'
-    : `<span class="pill waiting">${timeLeft(i)} left</span>`;
-  return `<div class="card" onclick="openDetail('${i.id}')">
+
+  let pill, when, overlay = '';
+
+  if (i.status === 'bought') {
+    pill = '<span class="pill bought">Bought</span>';
+    when = `<div class="when decided-ts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="11" height="11"><path d="M20 6 9 17l-5-5"/></svg>
+      ${fmtDateTime(i.decidedOn)}
+    </div>`;
+    overlay = `<div class="card-decided-bar bought"></div>`;
+  } else if (i.status === 'dropped') {
+    pill = '<span class="pill dropped">Dropped</span>';
+    when = `<div class="when decided-ts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="11" height="11"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      ${fmtDateTime(i.decidedOn)}
+    </div>`;
+    overlay = `<div class="card-decided-bar dropped"></div>`;
+  } else if (due) {
+    pill = '<span class="pill due">Decide now</span>';
+    when = `<div class="when">Added ${fmtDate(i.addedOn)}</div>`;
+  } else {
+    pill = `<span class="pill waiting">${timeLeft(i)} left</span>`;
+    when = `<div class="when">Added ${fmtDate(i.addedOn)}</div>`;
+  }
+
+  return `<div class="card ${decided ? 'card-decided' : ''}" onclick="openDetail('${i.id}')">
     ${due ? '<div class="due-dot"></div>' : ''}
+    ${overlay}
     ${img}
     <div class="body">
       <div class="name">${esc(i.name)}</div>
       <div class="meta"><span class="price">${fmtMoney(i.price)}</span>${pill}</div>
-      <div class="when">Added ${fmtDate(i.addedOn)}</div>
+      ${when}
     </div>
   </div>`;
 }
@@ -586,7 +656,7 @@ async function openDetail(id) {
     ? (due
       ? `<div class="review-banner due"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Cooling-off complete. Still want it?</div>`
       : `<div class="review-banner waiting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Cooling off — ${timeLeft(i)} left to review.</div>`)
-    : `<div class="review-banner ${i.status === 'bought' ? 'waiting' : 'due'}" style="background:var(--${i.status==='bought'?'buy':'drop'}-soft);color:var(--${i.status==='bought'?'buy':'drop'})">${i.status === 'bought' ? 'You bought this' : 'You dropped this'} on ${fmtDate(i.decidedOn)}.</div>`;
+    : `<div class="review-banner ${i.status === 'bought' ? 'waiting' : 'due'}" style="background:var(--${i.status==='bought'?'buy':'drop'}-soft);color:var(--${i.status==='bought'?'buy':'drop'})">${i.status === 'bought' ? 'You bought this' : 'You dropped this'} on ${fmtDateTime(i.decidedOn)}.</div>`;
 
   const urlChip = i.url ? `<a class="chip" href="${esc(i.url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open link</a>` : '';
 
@@ -629,7 +699,7 @@ async function decide(action) {
     toast('Deferred — back in ' + coolingLabel(i.price));
   } else {
     i.status = action === 'buy' ? 'bought' : 'dropped';
-    i.decidedOn = todayISO();
+    i.decidedOn = new Date().toISOString();   // full timestamp for date+time display
     i.history.push({ action: action === 'buy' ? 'bought' : 'dropped', on: todayISO() });
     await dbPut('items', i);
     toast(action === 'buy' ? 'Marked as bought ✓' : 'Dropped — money saved 🎉');

@@ -3,7 +3,7 @@
    It never proxies requests to the internet — only serves local cache,
    and for anything not cached it falls back to the cache (no network fetch for app data).
 */
-const CACHE = 'buylater-v3';
+const CACHE = 'buylater-v4';
 const ASSETS = [
   './',
   './index.html',
