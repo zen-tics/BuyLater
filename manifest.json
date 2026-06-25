@@ -1,13 +1,13 @@
 {
-  "name": "Buy Later",
-  "short_name": "Buy Later",
-  "description": "Pause before you spend. Photograph what you want, sleep on it, then decide.",
+  "name": "SmartBinge",
+  "short_name": "SmartBinge",
+  "description": "Binge less. Live more. Add what you want, wait it out, then decide.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0E1116",
-  "theme_color": "#0E1116",
+  "background_color": "#0047AB",
+  "theme_color": "#0047AB",
   "categories": ["finance", "lifestyle", "productivity"],
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

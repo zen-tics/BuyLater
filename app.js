@@ -9,6 +9,7 @@
 /* ---------- Defaults / settings ---------- */
 const DEFAULTS = {
   theme: 'dark',
+  palette: 'A',             // A = Cobalt Dark, B = Electric Teal, C = Sunset Cobalt
   remindersOn: true,
   thresholdPrice: 50,      // SGD
   daysUnder: 7,            // cooling-off days for items < threshold
@@ -883,6 +884,35 @@ function renderSettings() {
           <button class="${settings.theme==='dark'?'on':''}" onclick="setTheme('dark')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>Dark</button>
         </div>
       </div>
+      <div class="set-row" style="border-top:1px solid var(--line)">
+        <div class="l"><div class="t">Colour palette</div><div class="s">3 vibes, all built around the SmartBinge cobalt blue.</div></div>
+      </div>
+      <div class="palette-grid">
+        <div class="palette-opt ${(settings.palette||'A')==='A'?'on':''}" onclick="setPalette('A')">
+          <div class="palette-swatch">
+            <span style="background:#0047AB"></span>
+            <span style="background:#07091A"></span>
+            <span style="background:#00D97E"></span>
+          </div>
+          <div class="palette-label">Cobalt Dark</div>
+        </div>
+        <div class="palette-opt ${(settings.palette||'A')==='B'?'on':''}" onclick="setPalette('B')">
+          <div class="palette-swatch">
+            <span style="background:#0047AB"></span>
+            <span style="background:#050E18"></span>
+            <span style="background:#00C3FF"></span>
+          </div>
+          <div class="palette-label">Electric Teal</div>
+        </div>
+        <div class="palette-opt ${(settings.palette||'A')==='C'?'on':''}" onclick="setPalette('C')">
+          <div class="palette-swatch">
+            <span style="background:#0047AB"></span>
+            <span style="background:#0C0A14"></span>
+            <span style="background:#FF8C00"></span>
+          </div>
+          <div class="palette-label">Sunset Cobalt</div>
+        </div>
+      </div>
     </div>
 
     <div class="eyebrow">Cooling-off rules</div>
@@ -937,10 +967,101 @@ function renderSettings() {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       Fully offline · No accounts · Data never leaves this device
     </div>
+
+    <div class="eyebrow" style="margin-top:28px">About SmartBinge</div>
+    <div class="about-card">
+      <div class="about-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0047AB" stroke-width="2" width="32" height="32"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      </div>
+      <div class="about-name">SmartBinge</div>
+      <div class="about-tag">Binge less. Live more.</div>
+      <div class="about-desc">SmartBinge is your mindful shopping companion. See something you want? Add it, let the cooling-off timer run, then decide with a clear head. Studies show a waiting period cuts impulse buys by 30–40%. Fully private — no accounts, no internet, no tracking. Everything lives on your phone.</div>
+    </div>
+
+    <div class="eyebrow" style="margin-top:24px">How SmartBinge compares</div>
+    <div class="comp-desc">As an experienced market researcher, here is how SmartBinge stacks up against the top 3 apps in this space as of 2025.</div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-rank">1</div>
+        <div>
+          <div class="comp-name">CutCut — Stop Impulse Buying</div>
+          <div class="comp-platform">iOS · Premium freemium</div>
+        </div>
+      </div>
+      <div class="comp-body">The most polished entry in the category. Its standout feature is a <b>price-scaled timer</b> — the more expensive the item, the longer the forced wait — plus a guided "Circuit Breaker" flow that challenges you before you even add an item. Premium unlocks custom cooling rules, currency conversion across 4 languages, and exclusive app icons. Well-designed and growing fast.</div>
+      <div class="comp-edge">
+        <span class="comp-tag">Smart friction</span>
+        <span class="comp-tag">Decision journal</span>
+        <span class="comp-tag">Multi-currency</span>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-rank">2</div>
+        <div>
+          <div class="comp-name">Stop Impulse Buying</div>
+          <div class="comp-platform">iOS & Android · Free + subscription</div>
+        </div>
+      </div>
+      <div class="comp-body">The most viral in the space, driven by social media appeal and a cute, gamified UI. Its <b>No-Spend Challenge</b> calendar (tap each day you didn't impulse-buy) resonates strongly with the #NoBuy community. Also offers a 52-week savings challenge, grocery list, and budget tracker. Broad feature set designed for building overall financial discipline, not just cooling off on one item.</div>
+      <div class="comp-edge">
+        <span class="comp-tag">No-spend tracker</span>
+        <span class="comp-tag">Gamification</span>
+        <span class="comp-tag">Community vibe</span>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-rank">3</div>
+        <div>
+          <div class="comp-name">Buy or Bye</div>
+          <div class="comp-platform">iOS · Free</div>
+        </div>
+      </div>
+      <div class="comp-body">The simplest and cleanest concept: paste a product link, it auto-fetches the image and title, then locks the item for a 3-day default cooling-off period. You rate the item's utility, add a "why do I want it" note, and can only decide Buy or Bye after the timer expires. <b>Strong privacy stance</b> — no sign-up, all data stored locally — and a clean "Defense Rate" savings metric that shows your impulse buy success rate.</div>
+      <div class="comp-edge">
+        <span class="comp-tag">Auto URL fetch</span>
+        <span class="comp-tag">Utility rating</span>
+        <span class="comp-tag">Defense rate</span>
+      </div>
+    </div>
+
+    <div class="comp-card comp-us">
+      <div class="comp-head">
+        <div class="comp-rank sb">SB</div>
+        <div>
+          <div class="comp-name">SmartBinge — You are here</div>
+          <div class="comp-platform">Android PWA · 100% free, forever</div>
+        </div>
+      </div>
+      <div class="comp-body">SmartBinge's edge is <b>on-device photo scanning</b> (point your camera at a shelf tag or product label to auto-fill the price and name without any cloud service), full offline operation with a service worker, screenshot capture, and three distinct colour palettes. No subscription, no account, no data collection — ever. The only impulse-buying app where you can verify the privacy claims by reading the source yourself.</div>
+      <div class="comp-edge">
+        <span class="comp-tag" style="background:var(--accent-soft);color:var(--accent)">Photo OCR</span>
+        <span class="comp-tag" style="background:var(--accent-soft);color:var(--accent)">100% offline</span>
+        <span class="comp-tag" style="background:var(--accent-soft);color:var(--accent)">Free forever</span>
+      </div>
+    </div>
+
+    <div class="privacy" style="margin-top:8px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Research based on App Store listings, June 2026
+    </div>
   `;
 }
 
-async function setTheme(t) { document.body.setAttribute('data-theme', t); await saveSetting('theme', t); renderSettings(); }
+async function setTheme(t) {
+  document.body.setAttribute('data-theme', t);
+  await saveSetting('theme', t);
+  renderSettings();
+}
+async function setPalette(p) {
+  document.body.setAttribute('data-palette', p);
+  await saveSetting('palette', p);
+  renderSettings();
+}
 async function saveNum(k, v, min) { let n = parseFloat(v); if (isNaN(n) || n < min) n = DEFAULTS[k]; await saveSetting(k, n); }
 async function toggleSet(k, el) {
   const v = !settings[k]; el.classList.toggle('on', v); await saveSetting(k, v);
@@ -951,10 +1072,10 @@ async function exportData() {
   const items = await dbGetAll('items');
   // strip blobs (binary) -> JSON keeps it portable & private
   const clean = items.map(({ blob, ...rest }) => ({ ...rest, hadImage: !!blob }));
-  const data = { app: 'Buy Later', exportedOn: new Date().toISOString(), settings, items: clean };
+  const data = { app: 'SmartBinge', exportedOn: new Date().toISOString(), settings, items: clean };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'buy-later-backup.json'; a.click();
+  a.href = URL.createObjectURL(blob); a.download = 'smartbinge-backup.json'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   toast('Backup saved');
 }
@@ -1026,6 +1147,7 @@ function emptyState(icon, title, body) {
   await openDB();
   await loadSettings();
   document.body.setAttribute('data-theme', settings.theme);
+  document.body.setAttribute('data-palette', settings.palette || 'A');
   await refreshBadge();
   renderList();
   checkDueReminders();

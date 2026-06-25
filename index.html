@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0E1116">
+<meta name="theme-color" content="#0047AB">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Buy Later</title>
+<title>SmartBinge</title>
 <link rel="manifest" href="manifest.json">
 <style>
 /* ============================================================
@@ -18,46 +18,135 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Dark theme (default) */
+/* ── PALETTE A: Cobalt Dark (default) ──────────────────────────
+   Deep navy base, cobalt blue accent. Bold, focused.           */
+[data-theme="dark"][data-palette="A"],
 [data-theme="dark"] {
-  --bg: #0E1116;
-  --bg-elev: #161B22;
-  --bg-elev-2: #1C2230;
-  --line: #232A36;
-  --text: #E8ECF2;
-  --text-dim: #8B95A5;
-  --text-faint: #5A6473;
-  --accent: #6E8BFF;
-  --accent-soft: rgba(110,139,255,0.14);
-  --buy: #4ADE80;
-  --buy-soft: rgba(74,222,128,0.14);
-  --drop: #F87171;
-  --drop-soft: rgba(248,113,113,0.14);
-  --defer: #FBBF24;
-  --defer-soft: rgba(251,191,36,0.14);
-  --shadow: 0 8px 30px rgba(0,0,0,0.45);
-  --overlay: rgba(0,0,0,0.6);
+  --bg: #07091A;
+  --bg-elev: #0D1230;
+  --bg-elev-2: #141A3E;
+  --line: #1E2550;
+  --text: #E8EDF8;
+  --text-dim: #8898C4;
+  --text-faint: #4A567A;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.20);
+  --accent-bright: #3A7FFF;
+  --buy: #00D97E;
+  --buy-soft: rgba(0,217,126,0.15);
+  --drop: #FF4D6D;
+  --drop-soft: rgba(255,77,109,0.15);
+  --defer: #FFB830;
+  --defer-soft: rgba(255,184,48,0.15);
+  --shadow: 0 8px 30px rgba(0,0,0,0.55);
+  --overlay: rgba(0,0,0,0.65);
+}
+[data-theme="light"][data-palette="A"],
+[data-theme="light"] {
+  --bg: #EEF2FF;
+  --bg-elev: #FFFFFF;
+  --bg-elev-2: #E4EAFF;
+  --line: #C8D4F8;
+  --text: #060E30;
+  --text-dim: #3A4E80;
+  --text-faint: #8898C4;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.10);
+  --accent-bright: #0047AB;
+  --buy: #008F52;
+  --buy-soft: rgba(0,143,82,0.10);
+  --drop: #D6213E;
+  --drop-soft: rgba(214,33,62,0.10);
+  --defer: #C47A00;
+  --defer-soft: rgba(196,122,0,0.10);
+  --shadow: 0 8px 28px rgba(0,20,80,0.12);
+  --overlay: rgba(0,10,40,0.35);
 }
 
-/* Light theme */
-[data-theme="light"] {
-  --bg: #F6F7F9;
+/* ── PALETTE B: Electric Teal Dark ─────────────────────────────
+   Cobalt + electric cyan pop. Energetic, youthful.            */
+[data-theme="dark"][data-palette="B"] {
+  --bg: #050E18;
+  --bg-elev: #0A1A28;
+  --bg-elev-2: #0F2236;
+  --line: #163048;
+  --text: #DFF4FF;
+  --text-dim: #6FA4CC;
+  --text-faint: #3D6882;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.22);
+  --accent-bright: #00C3FF;
+  --buy: #00E5A0;
+  --buy-soft: rgba(0,229,160,0.15);
+  --drop: #FF5580;
+  --drop-soft: rgba(255,85,128,0.15);
+  --defer: #FFD426;
+  --defer-soft: rgba(255,212,38,0.15);
+  --shadow: 0 8px 30px rgba(0,0,0,0.55);
+  --overlay: rgba(0,0,0,0.65);
+}
+[data-theme="light"][data-palette="B"] {
+  --bg: #E8F6FF;
   --bg-elev: #FFFFFF;
-  --bg-elev-2: #F0F2F6;
-  --line: #E4E7EC;
-  --text: #1A1F29;
-  --text-dim: #687283;
-  --text-faint: #9AA3B2;
-  --accent: #4F6BFF;
-  --accent-soft: rgba(79,107,255,0.10);
-  --buy: #15A452;
-  --buy-soft: rgba(21,164,82,0.10);
-  --drop: #E5484D;
-  --drop-soft: rgba(229,72,77,0.10);
-  --defer: #D6951C;
-  --defer-soft: rgba(214,149,28,0.10);
-  --shadow: 0 8px 28px rgba(20,28,46,0.10);
-  --overlay: rgba(20,28,46,0.35);
+  --bg-elev-2: #D4EEFF;
+  --line: #B0D8F0;
+  --text: #011830;
+  --text-dim: #1A5070;
+  --text-faint: #6FA4CC;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.10);
+  --accent-bright: #0066CC;
+  --buy: #008060;
+  --buy-soft: rgba(0,128,96,0.10);
+  --drop: #C0003A;
+  --drop-soft: rgba(192,0,58,0.10);
+  --defer: #B07000;
+  --defer-soft: rgba(176,112,0,0.10);
+  --shadow: 0 8px 28px rgba(0,30,60,0.12);
+  --overlay: rgba(0,15,40,0.35);
+}
+
+/* ── PALETTE C: Sunset Cobalt ───────────────────────────────────
+   Cobalt + warm orange-coral. Bold contrast, street-smart.    */
+[data-theme="dark"][data-palette="C"] {
+  --bg: #0C0A14;
+  --bg-elev: #160F22;
+  --bg-elev-2: #1E1530;
+  --line: #2A1E44;
+  --text: #F0ECF8;
+  --text-dim: #9988BB;
+  --text-faint: #5A4878;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.22);
+  --accent-bright: #5599FF;
+  --buy: #00DF90;
+  --buy-soft: rgba(0,223,144,0.15);
+  --drop: #FF4060;
+  --drop-soft: rgba(255,64,96,0.15);
+  --defer: #FF8C00;
+  --defer-soft: rgba(255,140,0,0.17);
+  --shadow: 0 8px 30px rgba(0,0,0,0.55);
+  --overlay: rgba(0,0,0,0.65);
+}
+[data-theme="light"][data-palette="C"] {
+  --bg: #FDF6EE;
+  --bg-elev: #FFFFFF;
+  --bg-elev-2: #F5EBD8;
+  --line: #E8D4B8;
+  --text: #180A00;
+  --text-dim: #5C4020;
+  --text-faint: #AA8860;
+  --accent: #0047AB;
+  --accent-soft: rgba(0,71,171,0.10);
+  --accent-bright: #0047AB;
+  --buy: #00884A;
+  --buy-soft: rgba(0,136,74,0.10);
+  --drop: #CC2200;
+  --drop-soft: rgba(204,34,0,0.10);
+  --defer: #CC6600;
+  --defer-soft: rgba(204,102,0,0.10);
+  --shadow: 0 8px 28px rgba(40,20,0,0.12);
+  --overlay: rgba(30,10,0,0.35);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -95,8 +184,8 @@ header.topbar {
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .mark {
-  width: 30px; height: 30px; border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #B98BFF));
+  width: 36px; height: 36px; border-radius: 10px;
+  background: #0047AB;
   display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px;
   box-shadow: 0 4px 14px var(--accent-soft);
 }
@@ -140,12 +229,43 @@ nav.tabbar {
 .fab {
   position: fixed; right: 18px; bottom: calc(env(safe-area-inset-bottom) + 78px); z-index: 45;
   width: 60px; height: 60px; border-radius: 20px;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #B98BFF));
+  background: linear-gradient(135deg, var(--accent-bright, var(--accent)), color-mix(in srgb, var(--accent-bright, var(--accent)) 60%, var(--accent)));
   color: #fff; display: grid; place-items: center; box-shadow: 0 10px 26px var(--accent-soft), 0 4px 12px rgba(0,0,0,.25);
   transition: transform .2s var(--ease);
 }
 .fab:active { transform: scale(0.9) rotate(90deg); }
 .fab svg { width: 28px; height: 28px; stroke-width: 2.4; }
+
+/* ---------- Hero strip (list view) ---------- */
+.hero-strip {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-bright, var(--accent)) 100%);
+  border-radius: 20px; padding: 18px 20px; margin-bottom: 22px;
+  position: relative; overflow: hidden;
+}
+.hero-strip::after {
+  content: ''; position: absolute; top: -30px; right: -20px;
+  width: 120px; height: 120px; border-radius: 50%;
+  background: rgba(255,255,255,0.08); pointer-events: none;
+}
+.hero-tagline {
+  font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.5px; margin-bottom: 5px;
+}
+.hero-desc {
+  font-size: 12.5px; color: rgba(255,255,255,0.82); line-height: 1.55;
+}
+
+/* ---------- Palette picker (settings) ---------- */
+.palette-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 0 16px 16px; }
+.palette-opt {
+  border-radius: 14px; border: 2px solid transparent; overflow: hidden;
+  transition: border-color .2s, transform .15s; cursor: pointer;
+}
+.palette-opt.on { border-color: var(--accent); transform: scale(1.03); }
+.palette-opt:active { transform: scale(0.96); }
+.palette-swatch { height: 52px; display: flex; }
+.palette-swatch span { flex: 1; }
+.palette-label { font-size: 11px; font-weight: 650; text-align: center; padding: 7px 4px;
+  background: var(--bg-elev-2); color: var(--text-dim); }
 
 /* ---------- Section headers ---------- */
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-faint); margin: 4px 4px 14px; }
@@ -357,17 +477,38 @@ nav.tabbar {
 /* privacy footer */
 .privacy { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 18px; color: var(--text-faint); font-size: 11.5px; font-weight: 500; }
 .privacy svg { width: 14px; height: 14px; }
+
+/* About card */
+.about-card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 18px; padding: 22px 18px; text-align: center; margin-bottom: 6px; }
+.about-logo { width: 56px; height: 56px; border-radius: 16px; background: var(--accent-soft); display: grid; place-items: center; margin: 0 auto 12px; }
+.about-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); margin-bottom: 4px; }
+.about-tag { font-size: 12px; font-weight: 650; color: var(--text-faint); letter-spacing: .5px; margin-bottom: 14px; }
+.about-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; text-align: left; }
+
+/* Competitor cards */
+.comp-desc { font-size: 13px; color: var(--text-dim); margin: 0 4px 14px; line-height: 1.5; }
+.comp-card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.comp-card.comp-us { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: var(--accent-soft); }
+.comp-head { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 10px; }
+.comp-rank { width: 32px; height: 32px; border-radius: 10px; background: var(--bg-elev-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 14px; font-weight: 800; color: var(--text-dim); flex-shrink: 0; }
+.comp-rank.sb { background: var(--accent); color: #fff; border-color: var(--accent); font-size: 11px; }
+.comp-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.comp-platform { font-size: 11.5px; color: var(--text-faint); }
+.comp-body { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px; }
+.comp-body b { color: var(--text); font-weight: 700; }
+.comp-edge { display: flex; flex-wrap: wrap; gap: 6px; }
+.comp-tag { font-size: 10.5px; font-weight: 650; padding: 4px 9px; border-radius: 8px; background: var(--bg-elev-2); color: var(--text-dim); border: 1px solid var(--line); }
 </style>
 </head>
-<body data-theme="dark">
+<body data-theme="dark" data-palette="A">
 
 <div id="app">
   <header class="topbar">
     <div class="brand">
-      <div class="mark">BL</div>
+      <div class="mark"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAgklEQVR4nO3YMQ6AIBBEUZZ4Nz2AnFIPIKfDQmMWQjKVMMX8bml4IVRrodd6lO75H+VkfqyGoZC2FxYpMO5+o8C4lvagXPtQgG1nNUem1wnB/yGSBEIJhBIIJRBKIJRAKIFQAqEEQgmEEgglEIoORLdsoHuhB9RssaaVk0U/TKR899+gPRc4+JpwYgAAAABJRU5ErkJggg==" width="26" height="26" alt="SmartBinge" style="display:block"></div>
       <div>
-        <h1 id="topTitle">Buy Later</h1>
-        <div class="sub">Pause before you spend</div>
+        <h1 id="topTitle">SmartBinge</h1>
+        <div class="sub">Binge less. Live more.</div>
       </div>
     </div>
     <button class="iconbtn" onclick="go('settings')" aria-label="Settings">
@@ -378,9 +519,10 @@ nav.tabbar {
   <main id="main">
     <!-- LIST VIEW -->
     <section id="view-list" class="view active">
-      <div class="eyebrow">Everything</div>
-      <div class="section-title">My List</div>
-      <div class="section-desc">Items due for a decision sit on top. Decided items are below, newest first.</div>
+      <div class="hero-strip">
+        <div class="hero-tagline">Binge less. Live more.</div>
+        <div class="hero-desc">See something you want? Add it, wait, then decide. Cooling off cuts impulse buys by 30–40%.</div>
+      </div>
       <div id="listContent"></div>
     </section>
 
@@ -438,8 +580,8 @@ nav.tabbar {
 <div class="sheet-scrim" id="addScrim" onclick="closeAdd()"></div>
 <div class="sheet" id="addSheet">
   <div class="handle"></div>
-  <h2>Add to Buy Later</h2>
-  <div class="sub">Capture it now, decide later. We'll scan the image on-device to pre-fill the details — nothing leaves your phone.</div>
+  <h2>Add to SmartBinge</h2>
+  <div class="sub">Capture it now, decide later. We'll scan the image on-device to pre-fill details — nothing leaves your phone.</div>
 
   <div class="src-pick">
     <button class="src-opt" id="srcCamera" onclick="pickSource('camera')">
@@ -504,7 +646,7 @@ nav.tabbar {
     </div>
     <button class="btn primary" onclick="saveItem()" style="margin-top:6px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      Save to Buy Later
+      Save Item
     </button>
   </div>
 </div>
