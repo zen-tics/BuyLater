@@ -1107,7 +1107,7 @@ async function checkDueReminders() {
   try { notified = JSON.parse(localStorage.getItem(notifiedKey) || '[]'); } catch (_) {}
   const fresh = items.filter(i => !notified.includes(i.id));
   if (fresh.length) {
-    new Notification('Buy Later — time to review', {
+    new Notification('SmartBinge — time to review', {
       body: fresh.length === 1
         ? `"${fresh[0].name}" finished cooling off. Still want it?`
         : `${fresh.length} items are ready for your decision.`,
@@ -1138,6 +1138,37 @@ function emptyState(icon, title, body) {
     chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   };
   return `<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${icons[icon]}</svg></div><h3>${title}</h3><p>${body}</p></div>`;
+}
+
+/* ---------- PWA Install prompt ---------- */
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Chrome fired this — app meets install criteria.
+  // Prevent the mini info-bar; we'll show our own button instead.
+  e.preventDefault();
+  _installPrompt = e;
+  const btn = $('installBtn');
+  if (btn) btn.style.display = 'grid';
+});
+
+window.addEventListener('appinstalled', () => {
+  // App was installed — hide the button
+  _installPrompt = null;
+  const btn = $('installBtn');
+  if (btn) btn.style.display = 'none';
+  toast('SmartBinge installed — find it on your home screen');
+});
+
+async function triggerInstall() {
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  const { outcome } = await _installPrompt.userChoice;
+  if (outcome === 'accepted') {
+    _installPrompt = null;
+    const btn = $('installBtn');
+    if (btn) btn.style.display = 'none';
+  }
 }
 
 /* ============================================================

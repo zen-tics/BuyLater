@@ -3,7 +3,7 @@
    It never proxies requests to the internet — only serves local cache,
    and for anything not cached it falls back to the cache (no network fetch for app data).
 */
-const CACHE = 'smartbinge-v2';
+const CACHE = 'smartbinge-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,11 @@ const ASSETS = [
   './manifest.json',
   './tesseract.min.js',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './screenshots/shot1_list.png',
+  './screenshots/shot2_add.png',
+  './screenshots/shot3_inbox.png',
+  './screenshots/shot4_trends.png'
 ];
 
 self.addEventListener('install', (e) => {
